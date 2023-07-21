@@ -11,96 +11,134 @@ TOKEN = '5743367242:AAFi5ntJ-4bgwp5uV4Rc4qhUMmWe6ODxDAQ'
 updater = Updater(TOKEN, use_context=True)
 dispatcher = updater.dispatcher
 
+# Function to read questions and options from the questions.txt file
+def read_questions_from_file(filename='questions.txt'):
+    with open(filename, 'r') as file:
+        lines = file.read().splitlines()
+
+    questions = []
+    current_question = None
+    for line in lines:
+        line = line.strip()
+        if line.isdigit():
+            # Start of a new question
+            if current_question is not None:
+                questions.append(current_question)
+            current_question = {'question': line, 'options': []}
+        elif line:
+            # Option for the current question
+            if current_question is not None:
+                current_question['options'].append(line)
+    if current_question is not None:
+        questions.append(current_question)
+
+    return questions
+
+# Function to save user responses to a CSV file
+def save_user_responses_to_csv(user_responses, filename='user_responses.csv'):
+    with open(filename, 'w', newline='') as csvfile:
+        fieldnames = ['user_id'] + [f'Question{i+1}' for i in range(len(user_responses[0]['responses']))]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for user_data in user_responses:
+            writer.writerow(user_data)
+
 # Dictionary to store user responses
-user_responses = {}
+user_responses = []
 
 def start(update: Update, context: CallbackContext):
     user = update.message.from_user
     user_id = user.id
 
-    # Initialize user's examination responses
-    user_responses[user_id] = {}
+    # Check if the user has already started the examination
+    if any(user_data['user_id'] == user_id for user_data in user_responses):
+        update.message.reply_text("You have already started the examination. Use /reset to start over.")
+        return
 
-    update.message.reply_text(f"Hello {user.first_name}! I am Psy_exam_bot, your emotional and mental health examiner. Send /help to see the available commands.")
+    # Load questions from the questions.txt file
+    questions = read_questions_from_file()
 
-def help_command(update: Update, context: CallbackContext):
-    update.message.reply_text("Here are the available commands:\n"
-                              "/start - Start the bot and get a greeting.\n"
-                              "/help - Get help and see the available commands.\n"
-                              "/reset - Reset the examination and start over.")
+    if not questions:
+        update.message.reply_text("Sorry, there are no questions available at the moment.")
+        return
 
-def handle_message(update: Update, context: CallbackContext):
-    user = update.message.from_user
-    user_id = user.id
+    # Add user to user_responses with empty responses
+    user_data = {
+        'user_id': user_id,
+        'responses': [None] * len(questions)
+    }
+    user_responses.append(user_data)
 
-    # Get the number of questions answered
-    num_questions_answered = len(user_responses[user_id])
-
-    # List of questions to ask the user
-    questions = [
-        "1. How are you feeling today?",
-        "2. On a scale of 1 to 10, how happy are you?",
-        "3. How would you rate your stress level right now?",
-    ]
-
-    if num_questions_answered < len(questions):
-        # Ask the next question
-        update.message.reply_text(questions[num_questions_answered])
-    else:
-        # If all questions answered, thank the user
-        update.message.reply_text("Thank you for completing the examination! Your responses have been recorded.")
+    # Ask the first question
+    question = questions[0]
+    options = "\n".join([f"{index}. {option}" for index, option in enumerate(question['options'])])
+    update.message.reply_text(f"{question['question']}\n{options}")
 
 def process_response(update: Update, context: CallbackContext):
     user = update.message.from_user
     user_id = user.id
 
-    # Get the number of questions answered
-    num_questions_answered = len(user_responses[user_id])
+    # Check if the user has started the examination
+    user_data = next((data for data in user_responses if data['user_id'] == user_id), None)
+    if user_data is None:
+        update.message.reply_text("Please use the /start_exam command to begin the examination.")
+        return
 
-    # List of questions to ask the user
-    questions = [
-        "1. How are you feeling today?",
-        "2. On a scale of 1 to 10, how happy are you?",
-        "3. How would you rate your stress level right now?",
-    ]
+    # Load questions from the questions.txt file
+    questions = read_questions_from_file()
 
-    # Store the user's response to the corresponding question
-    user_responses[user_id][num_questions_answered + 1] = update.message.text
+    if not questions:
+        update.message.reply_text("Sorry, there are no questions available at the moment.")
+        return
 
-    # Check if all questions have been answered
-    if num_questions_answered + 1 < len(questions):
-        # Ask the next question
-        update.message.reply_text(questions[num_questions_answered + 1])
+    # Get the user's current question index
+    current_question_index = user_data['responses'].count(None)
+
+    # Check if the user's response is a valid option
+    try:
+        response_option = int(update.message.text)
+    except ValueError:
+        update.message.reply_text("Invalid option. Please choose a number corresponding to the options.")
+        return
+
+    question = questions[current_question_index]
+    num_options = len(question['options'])
+
+    if 0 <= response_option < num_options:
+        # Store the user's response for the current question
+        user_data['responses'][current_question_index] = question['options'][response_option]
+        # Move to the next question or complete the examination
+        if current_question_index + 1 < len(questions):
+            next_question = questions[current_question_index + 1]
+            options = "\n".join([f"{index}. {option}" for index, option in enumerate(next_question['options'])])
+            update.message.reply_text(f"{next_question['question']}\n{options}")
+        else:
+            update.message.reply_text("Thank you for completing the examination! Your responses have been recorded.")
+            # Save the user's responses to a CSV file
+            save_user_responses_to_csv(user_responses)
+            # Remove the user_data from user_responses to indicate the examination is completed
+            user_responses.remove(user_data)
     else:
-        # If all questions answered, thank the user
-        update.message.reply_text("Thank you for completing the examination! Your responses have been recorded.")
+        update.message.reply_text("Invalid option. Please choose a number corresponding to the options.")
 
 def reset(update: Update, context: CallbackContext):
     user = update.message.from_user
     user_id = user.id
 
-    # Reset user's examination responses
-    user_responses[user_id] = {}
-    update.message.reply_text("Examination reset. Please answer the first question: How are you feeling today?")
+    # Check if the user has started the examination
+    user_data = next((data for data in user_responses if data['user_id'] == user_id), None)
+    if user_data is None:
+        update.message.reply_text("Please use the /start_exam command to begin the examination.")
+        return
+
+    # Reset the user's responses
+    user_data['responses'] = [None] * len(user_data['responses'])
+    update.message.reply_text("Examination reset. Please answer the first question.")
 
 # Add the command and message handlers to the dispatcher.
-dispatcher.add_handler(CommandHandler("start", start))
-dispatcher.add_handler(CommandHandler("help", help_command))
+dispatcher.add_handler(CommandHandler("start_exam", start))
 dispatcher.add_handler(CommandHandler("reset", reset))
 dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, process_response))
-
-def save_user_responses_to_csv(user_responses, filename='user_responses.csv'):
-    with open(filename, 'w', newline='') as csvfile:
-        fieldnames = ['user_id', 'feeling', 'happiness', 'stress_level']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        for user_id, responses in user_responses.items():
-            writer.writerow({
-                'user_id': user_id,
-                'feeling': responses.get(1, 'Not answered'),
-                'happiness': responses.get(2, 'Not answered'),
-                'stress_level': responses.get(3, 'Not answered'),
-            })
 
 def main():
     updater.start_polling()
@@ -114,4 +152,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
