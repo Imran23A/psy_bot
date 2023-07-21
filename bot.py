@@ -1,5 +1,6 @@
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import csv
 
 # Set up the logging module to see logs from the Telegram library.
 import logging
@@ -88,9 +89,28 @@ dispatcher.add_handler(CommandHandler("help", help_command))
 dispatcher.add_handler(CommandHandler("reset", reset))
 dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, process_response))
 
+def save_user_responses_to_csv(user_responses, filename='user_responses.csv'):
+    with open(filename, 'w', newline='') as csvfile:
+        fieldnames = ['user_id', 'feeling', 'happiness', 'stress_level']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for user_id, responses in user_responses.items():
+            writer.writerow({
+                'user_id': user_id,
+                'feeling': responses.get(1, 'Not answered'),
+                'happiness': responses.get(2, 'Not answered'),
+                'stress_level': responses.get(3, 'Not answered'),
+            })
+
 def main():
     updater.start_polling()
-    updater.idle()
+
+    try:
+        # Keep the program running to handle signals (e.g., SIGINT, SIGTERM)
+        updater.idle()
+    finally:
+        # Save user responses to a CSV file before exiting
+        save_user_responses_to_csv(user_responses)
 
 if __name__ == '__main__':
     main()
