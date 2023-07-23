@@ -12,10 +12,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # State definitions for top-level conversation
-SELECTING_ACTION, SELECTING_QUESTIONS = map(chr, range(2))
-
-# State definitions for second-level conversation
-ANSWERING = map(chr, range(2, 5))  # Exclusive because the top-level conversation has priority
+SELECTING_ACTION, SELECTING_QUESTIONS, CONFIRM_RESTART_TEST = map(chr, range(3))
 
 # Different constants for this example
 START_EXAM = "start_exam"
@@ -44,10 +41,7 @@ def read_questions_from_file():
 
 def start(update: Update, _: CallbackContext) -> int:
     keyboard = [
-        [InlineKeyboardButton("Start Test", callback_data=START_EXAM)],
-        [InlineKeyboardButton("Reset Test", callback_data=RESET_EXAM)],
-        [InlineKeyboardButton("Help", callback_data=HELP)],
-        [InlineKeyboardButton("Watch Results", callback_data=WATCH_RESULTS)]
+        [InlineKeyboardButton("Start Test", callback_data=START_EXAM)]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -62,38 +56,83 @@ def handle_action(update: Update, context: CallbackContext) -> int:
 
     action = query.data
     if action == START_EXAM:
-        read_questions_from_file()
-        start_exam(update, context)
-        return SELECTING_QUESTIONS
-    elif action == RESET_EXAM:
-        reset_exam(update, context)
-        return SELECTING_ACTION
-    elif action == HELP:
-        show_help(update, context)
-        return SELECTING_ACTION
-    elif action == WATCH_RESULTS:
-        watch_results(update, context)
-        return SELECTING_ACTION
+        user_id = update.effective_user.id
+        user_data = context.user_data.setdefault(user_id, {})
+
+        if 'current_question' in user_data:
+            # If the user has an ongoing test, ask for confirmation to restart or continue
+            keyboard = [
+                [InlineKeyboardButton("Yes", callback_data="restart")],
+                [InlineKeyboardButton("No", callback_data="stay")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            message = update.effective_message.reply_text(
+                "You have an ongoing test. Do you want to restart it?",
+                reply_markup=reply_markup
+            )
+            user_data['confirmation_message'] = message.message_id
+            return CONFIRM_RESTART_TEST
+        else:
+            # Start a new test
+            read_questions_from_file()
+            user_data['current_question'] = 1  # Start from the first question
+            user_data['answers'] = {}  # Initialize or reset answers dictionary
+            next_question(update, context)
+            return SELECTING_QUESTIONS
     else:
         # In case of unexpected callback data
         return SELECTING_ACTION
 
+
 def start_exam(update: Update, query: CallbackContext):
     user_id = update.effective_user.id
     user_data = query.user_data.setdefault(user_id, {})
-    user_data['current_question'] = 1  # Start from the first question
-    user_data['answers'] = {}  # Initialize or reset answers dictionary
 
-    next_question(update, query)
+    if 'current_question' in user_data:
+        # If the user has an ongoing test, ask for confirmation to restart or continue
+        keyboard = [
+            [InlineKeyboardButton("Yes", callback_data="restart")],
+            [InlineKeyboardButton("No", callback_data="stay")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        message = update.effective_message.reply_text(
+            "You have an ongoing test. Do you want to restart it?",
+            reply_markup=reply_markup
+        )
+        user_data['confirmation_message'] = message.message_id
+        return CONFIRM_RESTART_TEST
+    else:
+        # Start a new test
+        read_questions_from_file()
+        user_data['current_question'] = 1  # Start from the first question
+        user_data['answers'] = {}  # Initialize or reset answers dictionary
+        next_question(update, query)
 
-def reset_exam(update: Update, query):
+def handle_restart_test(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    query.answer()
+
+    choice = query.data
+    if choice == "restart":
+        # Restart the test
+        read_questions_from_file()
+        user_id = update.effective_user.id
+        user_data = context.user_data.setdefault(user_id, {})
+        user_data['current_question'] = 1  # Start from the first question
+        user_data['answers'] = {}  # Initialize or reset answers dictionary
+        next_question(update, context)
+    elif choice == "stay":
+        # Continue the test from the current question
+        next_question(update, context)
+
+    # Remove the confirmation message
     user_id = update.effective_user.id
-    user_data = query.message.bot_data.get(user_id)
-    if user_data:
-        user_data['current_question'] = 1
-        user_data['answers'] = {}
-    query.message.reply_text("Test has been reset. You can start again by choosing 'Start Test'.")
+    user_data = context.user_data.setdefault(user_id, {})
+    if 'confirmation_message' in user_data:
+        confirmation_message_id = user_data['confirmation_message']
+        context.bot.delete_message(update.effective_chat.id, confirmation_message_id)
 
+    return SELECTING_ACTION
 
 def show_help(update: Update, query):
     query.message.reply_text(
@@ -232,19 +271,19 @@ def main():
     # Get the dispatcher to register handlers
     dp = updater.dispatcher
 
-    # Add conversation handler with the states SELECTING_ACTION and SELECTING_QUESTIONS
+    # Add conversation handler with the states SELECTING_ACTION, SELECTING_QUESTIONS, and CONFIRM_RESTART_TEST
     conversation_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
             SELECTING_ACTION: [
                 CallbackQueryHandler(handle_action, pattern='^' + str(START_EXAM) + '$'),
-                CallbackQueryHandler(handle_action, pattern='^' + str(RESET_EXAM) + '$'),
-                CallbackQueryHandler(handle_action, pattern='^' + str(HELP) + '$'),
-                CallbackQueryHandler(handle_action, pattern='^' + str(WATCH_RESULTS) + '$'),
             ],
             SELECTING_QUESTIONS: [
                 CallbackQueryHandler(handle_answer, pattern='^[0-3]$'),
             ],
+            CONFIRM_RESTART_TEST: [
+                CallbackQueryHandler(handle_restart_test, pattern='^(restart|stay)$'),
+            ]
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
@@ -254,7 +293,7 @@ def main():
     # Start the Bot
     updater.start_polling()
 
-    # Run the bot until the user presses Ctrl-C or the process receives SIGINT, SIGTERM or SIGABRT
+    # Run the bot until the user presses Ctrl-C or the process receives SIGINT, SIGTERM, or SIGABRT
     updater.idle()
 
 
