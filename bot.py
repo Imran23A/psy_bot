@@ -1,24 +1,22 @@
 import logging
 import csv
-from telegram import Update, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ConversationHandler, CallbackQueryHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackContext, ConversationHandler, CallbackQueryHandler
 import warnings
-import datetime
-
-warnings.filterwarnings("ignore", "If 'per_message=False', 'CallbackQueryHandler' will not be", UserWarning)
+import datetime  # Import the datetime module to fix the E0602 error
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                      level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # State definitions for top-level conversation
-SELECTING_ACTION, SELECTING_QUESTIONS, CONFIRM_RESTART_TEST = map(chr, range(3))
+SELECTING_QUESTIONS = 0
 
-# Different constants for this example
+# Constants for this example
 START_EXAM = "start_exam"
-RESET_EXAM = "reset_exam"
-HELP = "help"
-WATCH_RESULTS = "watch_results"
+QUESTIONS_FILE = "questions.tsv"
+RESULTS_FILE = "results.csv"
+QUESTIONS_PER_TEST = 21
 
 # A dictionary containing the questions and options read from the questions.tsv file
 questions = {}
@@ -26,7 +24,7 @@ questions = {}
 
 def read_questions_from_file():
     try:
-        with open('questions.tsv', 'r', encoding='utf-8') as file:
+        with open(QUESTIONS_FILE, 'r', encoding='utf-8') as file:
             lines = file.readlines()
             for line in lines:
                 data = line.strip().split('\t')
@@ -35,124 +33,56 @@ def read_questions_from_file():
                     options = data[1:]
                     questions[question] = options
     except FileNotFoundError:
-        raise Exception("Failed to read questions from the file. Make sure 'questions.tsv' exists.")
+        raise Exception(f"Failed to read questions from the file '{QUESTIONS_FILE}'. Make sure it exists.")
     return questions
 
 
 def start(update: Update, _: CallbackContext) -> int:
-    keyboard = [
-        [InlineKeyboardButton("Start Test", callback_data=START_EXAM)]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    update.message.reply_text("Hello! I'm your depression test bot. How can I assist you?", reply_markup=reply_markup)
-
-    return SELECTING_ACTION
-
-
-def handle_action(update: Update, context: CallbackContext) -> int:
-    query = update.callback_query
-    query.answer()
-
-    action = query.data
-    if action == START_EXAM:
-        user_id = update.effective_user.id
-        user_data = context.user_data.setdefault(user_id, {})
-
-        if 'current_question' in user_data:
-            # If the user has an ongoing test, ask for confirmation to restart or continue
-            keyboard = [
-                [InlineKeyboardButton("Yes", callback_data="restart")],
-                [InlineKeyboardButton("No", callback_data="stay")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            message = update.effective_message.reply_text(
-                "You have an ongoing test. Do you want to restart it?",
-                reply_markup=reply_markup
-            )
-            user_data['confirmation_message'] = message.message_id
-            return CONFIRM_RESTART_TEST
-        else:
-            # Start a new test
-            read_questions_from_file()
-            user_data['current_question'] = 1  # Start from the first question
-            user_data['answers'] = {}  # Initialize or reset answers dictionary
-            next_question(update, context)
-            return SELECTING_QUESTIONS
-    else:
-        # In case of unexpected callback data
-        return SELECTING_ACTION
-
-
-def start_exam(update: Update, query: CallbackContext):
     user_id = update.effective_user.id
-    user_data = query.user_data.setdefault(user_id, {})
+    user_data = _.user_data.setdefault(user_id, {})
 
-    if 'current_question' in user_data:
-        # If the user has an ongoing test, ask for confirmation to restart or continue
+    # Check if the user is new or in the middle of a test
+    if 'current_question' not in user_data:
+        # New user, show the "Start Test" button
         keyboard = [
-            [InlineKeyboardButton("Yes", callback_data="restart")],
-            [InlineKeyboardButton("No", callback_data="stay")]
+            [InlineKeyboardButton("Start Test", callback_data=START_EXAM)]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        message = update.effective_message.reply_text(
-            "You have an ongoing test. Do you want to restart it?",
-            reply_markup=reply_markup
-        )
-        user_data['confirmation_message'] = message.message_id
-        return CONFIRM_RESTART_TEST
+
+        update.message.reply_text("Hello! I'm your depression test bot. How can I assist you?", reply_markup=reply_markup)
     else:
-        # Start a new test
+        # User in the middle of a test, immediately restart the test without any notification
         read_questions_from_file()
-        user_data['current_question'] = 1  # Start from the first question
-        user_data['answers'] = {}  # Initialize or reset answers dictionary
-        next_question(update, query)
+        user_data['current_question'] = 1
+        user_data['answers'] = {}
+        next_question(update, _)
 
-def handle_restart_test(update: Update, context: CallbackContext) -> int:
-    query = update.callback_query
-    query.answer()
+    return SELECTING_QUESTIONS
 
-    choice = query.data
-    if choice == "restart":
-        # Restart the test
-        read_questions_from_file()
-        user_id = update.effective_user.id
-        user_data = context.user_data.setdefault(user_id, {})
-        user_data['current_question'] = 1  # Start from the first question
-        user_data['answers'] = {}  # Initialize or reset answers dictionary
-        next_question(update, context)
-    elif choice == "stay":
-        # Continue the test from the current question
-        next_question(update, context)
 
-    # Remove the confirmation message
+def start_exam(update: Update, _: CallbackContext):
     user_id = update.effective_user.id
-    user_data = context.user_data.setdefault(user_id, {})
-    if 'confirmation_message' in user_data:
-        confirmation_message_id = user_data['confirmation_message']
-        context.bot.delete_message(update.effective_chat.id, confirmation_message_id)
+    user_data = _.user_data.setdefault(user_id, {})
 
-    return SELECTING_ACTION
+    # Start a new test
+    read_questions_from_file()
+    user_data['current_question'] = 1  # Start from the first question
+    user_data['answers'] = {}  # Initialize or reset answers dictionary
+    next_question(update, _)
 
-def show_help(update: Update, query):
-    query.message.reply_text(
-        "This is a depression test bot. You can take the test by choosing 'Start Test'. "
-        "You will be presented with 21 questions, each with 4 options to choose from. "
-        "Simply click on the option that best reflects your current state of mind. "
-        "After completing the test, you can choose 'Watch Results' to see your test results."
-    )
+    return SELECTING_QUESTIONS
 
 
-def next_question(update: Update, context: CallbackContext):
+def next_question(update: Update, _: CallbackContext):
     user_id = update.effective_user.id
-    user_data = context.user_data.get(user_id)
+    user_data = _.user_data.get(user_id)
     if not user_data:
         return
 
     current_question_number = user_data.get('current_question')
-    if not current_question_number or current_question_number > len(questions):
+    if not current_question_number or current_question_number > QUESTIONS_PER_TEST:
         # End of the exam, show results
-        show_results(update, context)
+        show_results(update, _)
         return ConversationHandler.END
 
     question = list(questions.keys())[current_question_number - 1]
@@ -167,9 +97,7 @@ def next_question(update: Update, context: CallbackContext):
     # If there's a previous message, edit it, otherwise send a new one
     previous_message_id = user_data.get('previous_message')
     if previous_message_id:
-        context.bot.edit_message_text(
-            chat_id=update.effective_chat.id,
-            message_id=previous_message_id,
+        update.callback_query.edit_message_text(
             text=question,
             reply_markup=reply_markup
         )
@@ -177,29 +105,31 @@ def next_question(update: Update, context: CallbackContext):
         message = update.effective_message.reply_text(question, reply_markup=reply_markup)
         user_data['previous_message'] = message.message_id
 
-def handle_answer(update: Update, context: CallbackContext) -> int:
+
+def handle_answer(update: Update, _: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
 
     user_id = update.effective_user.id
-    user_data = context.user_data.get(user_id)
+    user_data = _.user_data.get(user_id)
     if not user_data:
         return ConversationHandler.END
 
     question_number = user_data.get('current_question')
-    if not question_number or question_number > len(questions):
-        show_results(update, context)
+    if not question_number or question_number > QUESTIONS_PER_TEST:
+        show_results(update, _)
         return ConversationHandler.END
 
     chosen_option = int(query.data)
     user_data['answers'][question_number] = chosen_option
     user_data['current_question'] += 1
 
-    return next_question(update, context)
+    return next_question(update, _)
 
-def show_results(update: Update, context: CallbackContext):
+
+def show_results(update: Update, _: CallbackContext):
     user_id = update.effective_user.id
-    user_data = context.user_data.get(user_id)
+    user_data = _.user_data.get(user_id)
     if not user_data:
         return
 
@@ -218,39 +148,14 @@ def show_results(update: Update, context: CallbackContext):
     else:
         result = "You have severe depression."
 
-    context.bot.send_message(chat_id=update.effective_chat.id, text=f"Test completed! Your results: {result}")
+    update.effective_message.reply_text(f"Test completed! Your results: {result}")
 
     # Save results in CSV file
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    with open('results.csv', 'a', newline='') as csvfile:
+    with open(RESULTS_FILE, 'a', newline='') as csvfile:
         fieldnames = ['user_id', 'timestamp', 'result']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writerow({'user_id': user_id, 'timestamp': timestamp, 'result': total_score})
-
-def watch_results(update: Update, query):
-    user_id = update.effective_user.id
-    user_data = query.message.bot_data.get(user_id)
-    if not user_data:
-        return
-
-    # Calculate and show the latest results
-    answers = user_data.get('answers', {})
-    total_score = sum(answers.values())
-
-    result = ""
-    if total_score <= 9:
-        result = "You have no depressive symptoms."
-    elif 10 <= total_score <= 15:
-        result = "You may have mild depression (subdepression)."
-    elif 16 <= total_score <= 19:
-        result = "You have moderate depression."
-    elif 20 <= total_score <= 29:
-        result = "You have severe depression (moderate severity)."
-    else:
-        result = "You have severe depression."
-
-    query.message.reply_text(f"Your latest test results: {result}")
-
 
 def cancel(update: Update, _: CallbackContext) -> int:
     query = update.callback_query
@@ -271,18 +176,13 @@ def main():
     # Get the dispatcher to register handlers
     dp = updater.dispatcher
 
-    # Add conversation handler with the states SELECTING_ACTION, SELECTING_QUESTIONS, and CONFIRM_RESTART_TEST
+    # Add conversation handler with the state SELECTING_QUESTIONS
     conversation_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            SELECTING_ACTION: [
-                CallbackQueryHandler(handle_action, pattern='^' + str(START_EXAM) + '$'),
-            ],
             SELECTING_QUESTIONS: [
+                CallbackQueryHandler(start_exam, pattern='^' + str(START_EXAM) + '$'),
                 CallbackQueryHandler(handle_answer, pattern='^[0-3]$'),
-            ],
-            CONFIRM_RESTART_TEST: [
-                CallbackQueryHandler(handle_restart_test, pattern='^(restart|stay)$'),
             ]
         },
         fallbacks=[CommandHandler('cancel', cancel)]
