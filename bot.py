@@ -49,11 +49,15 @@ def start(update: Update, _: CallbackContext) -> int:
 
         update.message.reply_text("Hello! I'm your depression test bot. How can I assist you?", reply_markup=reply_markup)
     else:
-        # User in the middle of a test, immediately restart the test without any notification
-        read_questions_from_file()
-        user_data['current_question'] = 1
-        user_data['answers'] = {}
-        next_question(update, _)
+        # User in the middle of a test, ask if they want to cancel the ongoing test
+        keyboard = [
+            [InlineKeyboardButton("Cancel Current Test", callback_data='cancel_test')],
+            [InlineKeyboardButton("Start New Test", callback_data='start_test')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        update.message.reply_text("You have an ongoing test. Do you want to cancel it and start a new test?",
+                                  reply_markup=reply_markup)
 
     return SELECTING_QUESTIONS
 
@@ -62,10 +66,21 @@ def start_exam(update: Update, _: CallbackContext):
     user_id = update.effective_user.id
     user_data = _.user_data.setdefault(user_id, {})
 
+    # Check if the user is already in the middle of a test
+    if 'current_question' in user_data:
+        # Clear ongoing test data to start a new one
+        user_data.clear()
+
     # Start a new test
     read_questions_from_file()
     user_data['current_question'] = 1  # Start from the first question
     user_data['answers'] = {}  # Initialize or reset answers dictionary
+
+    # If there was a previous message, edit it with the new test
+    previous_message_id = user_data.get('previous_message')
+    if previous_message_id:
+        update.callback_query.edit_message_text("Test started! Please answer the following questions:")
+
     next_question(update, _)
 
     return SELECTING_QUESTIONS
