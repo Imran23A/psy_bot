@@ -2,19 +2,16 @@ import logging
 import csv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext, ConversationHandler, CallbackQueryHandler
-import warnings
 import datetime
 
 # Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                     level=logging.INFO)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # State definitions for top-level conversation
-SELECTING_ACTION, SELECTING_QUESTIONS, CONFIRM_RESTART_TEST = map(chr, range(3))
+SELECTING_QUESTIONS = 1
 
 # Constants for this example
-START_EXAM = "start_exam"
 QUESTIONS_FILE = "questions.tsv"
 RESULTS_FILE = "results.csv"
 QUESTIONS_PER_TEST = 21
@@ -46,7 +43,7 @@ def start(update: Update, _: CallbackContext) -> int:
     if 'current_question' not in user_data:
         # New user, show the "Start Test" button
         keyboard = [
-            [InlineKeyboardButton("Start Test", callback_data=START_EXAM)]
+            [InlineKeyboardButton("Start Test", callback_data='start_test')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -69,7 +66,6 @@ def start_exam(update: Update, _: CallbackContext):
     read_questions_from_file()
     user_data['current_question'] = 1  # Start from the first question
     user_data['answers'] = {}  # Initialize or reset answers dictionary
-    user_data.pop('previous_message', None)  # Remove the previous message
     next_question(update, _)
 
     return SELECTING_QUESTIONS
@@ -83,9 +79,9 @@ def next_question(update: Update, _: CallbackContext):
 
     current_question_number = user_data.get('current_question')
     if not current_question_number or current_question_number > QUESTIONS_PER_TEST:
-        # End of the exam, show results
+        # Test is completed, show results as a "fake" last question
         show_results(update, _)
-        return ConversationHandler.END
+        return SELECTING_QUESTIONS
 
     question = list(questions.keys())[current_question_number - 1]
     options = questions[question]
@@ -107,6 +103,8 @@ def next_question(update: Update, _: CallbackContext):
         message = update.effective_message.reply_text(question, reply_markup=reply_markup)
         user_data['previous_message'] = message.message_id
 
+    user_data['current_question'] += 1
+
 
 def handle_answer(update: Update, _: CallbackContext) -> int:
     query = update.callback_query
@@ -119,8 +117,9 @@ def handle_answer(update: Update, _: CallbackContext) -> int:
 
     question_number = user_data.get('current_question')
     if not question_number or question_number > QUESTIONS_PER_TEST:
+        # Should not happen, but just in case
         show_results(update, _)
-        return ConversationHandler.END
+        return SELECTING_QUESTIONS
 
     chosen_option = int(query.data)
     user_data['answers'][question_number] = chosen_option
@@ -150,8 +149,6 @@ def show_results(update: Update, _: CallbackContext):
     else:
         result = "You have severe depression."
 
-    update.effective_message.reply_text(f"Test completed! Your results: {result}")
-
     # Save results in CSV file
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open(RESULTS_FILE, 'a', newline='') as csvfile:
@@ -159,13 +156,21 @@ def show_results(update: Update, _: CallbackContext):
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writerow({'user_id': user_id, 'timestamp': timestamp, 'result': total_score})
 
-def cancel(update: Update, _: CallbackContext) -> int:
-    query = update.callback_query
-    query.answer()
+    # If there was a previous message, edit it with the results, otherwise send a new message
+    previous_message_id = user_data.get('previous_message')
+    if previous_message_id:
+        update.callback_query.edit_message_text(
+            text=f"Test completed! Your results: {result}",
+            reply_markup=None  # Remove the "Cancel" button from the message
+        )
+    else:
+        update.effective_message.reply_text(f"Test completed! Your results: {result}")
 
-    query.message.reply_text("You have canceled the operation.")
+    # Clear user data after showing results
+    user_data.clear()
 
-    return ConversationHandler.END
+    # Allow the user to start the test again
+    return SELECTING_QUESTIONS
 
 
 def main():
@@ -183,11 +188,11 @@ def main():
         entry_points=[CommandHandler('start', start)],
         states={
             SELECTING_QUESTIONS: [
-                CallbackQueryHandler(start_exam, pattern='^' + str(START_EXAM) + '$'),
+                CallbackQueryHandler(start_exam, pattern='^start_test$'),
                 CallbackQueryHandler(handle_answer, pattern='^[0-3]$'),
-            ]
+            ],
         },
-        fallbacks=[CommandHandler('cancel', cancel)]
+        fallbacks=[]
     )
 
     dp.add_handler(conversation_handler)
