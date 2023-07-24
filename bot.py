@@ -3,14 +3,15 @@ import csv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext, ConversationHandler, CallbackQueryHandler
 import warnings
-import datetime  # Import the datetime module to fix the E0602 error
+import datetime
+
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                      level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # State definitions for top-level conversation
-SELECTING_QUESTIONS = 0
+SELECTING_ACTION, SELECTING_QUESTIONS, CONFIRM_RESTART_TEST = map(chr, range(3))
 
 # Constants for this example
 START_EXAM = "start_exam"
@@ -68,6 +69,7 @@ def start_exam(update: Update, _: CallbackContext):
     read_questions_from_file()
     user_data['current_question'] = 1  # Start from the first question
     user_data['answers'] = {}  # Initialize or reset answers dictionary
+    user_data.pop('previous_message', None)  # Remove the previous message
     next_question(update, _)
 
     return SELECTING_QUESTIONS
