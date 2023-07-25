@@ -76,17 +76,13 @@ def start_exam(update: Update, _: CallbackContext):
     user_data['current_question'] = 1  # Start from the first question
     user_data['answers'] = {}  # Initialize or reset answers dictionary
 
-    # If there was a previous message, edit it with the new test
-    previous_message_id = user_data.get('previous_message')
-    if previous_message_id:
-        update.callback_query.edit_message_text("Test started! Please answer the following questions:")
-
-    next_question(update, _)
+    # Generate and send the first question
+    send_question(update, _)
 
     return SELECTING_QUESTIONS
 
 
-def next_question(update: Update, _: CallbackContext):
+def send_question(update: Update, _: CallbackContext):
     user_id = update.effective_user.id
     user_data = _.user_data.get(user_id)
     if not user_data:
@@ -118,8 +114,6 @@ def next_question(update: Update, _: CallbackContext):
         message = update.effective_message.reply_text(question, reply_markup=reply_markup)
         user_data['previous_message'] = message.message_id
 
-    user_data['current_question'] += 1
-
 
 def handle_answer(update: Update, _: CallbackContext) -> int:
     query = update.callback_query
@@ -140,7 +134,10 @@ def handle_answer(update: Update, _: CallbackContext) -> int:
     user_data['answers'][question_number] = chosen_option
     user_data['current_question'] += 1
 
-    return next_question(update, _)
+    # Send the next question
+    send_question(update, _)
+
+    return SELECTING_QUESTIONS
 
 
 def show_results(update: Update, _: CallbackContext):
@@ -183,9 +180,6 @@ def show_results(update: Update, _: CallbackContext):
 
     # Clear user data after showing results
     user_data.clear()
-
-    # Allow the user to start the test again
-    return SELECTING_QUESTIONS
 
 
 def main():
