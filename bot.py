@@ -8,6 +8,7 @@ import datetime
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 # State definitions for top-level conversation
 SELECTING_QUESTIONS = 1
 
