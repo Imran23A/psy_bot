@@ -62,12 +62,24 @@ def start(update: Update, _: CallbackContext) -> int:
     return SELECTING_QUESTIONS
 
 
+def delete_message(update: Update, message_id: int):
+    try:
+        update.effective_chat.bot.delete_message(chat_id=update.effective_chat.id, message_id=message_id)
+    except Exception as e:
+        logger.warning(f"Failed to delete message {message_id}: {e}")
+
+
 def start_exam(update: Update, _: CallbackContext):
     user_id = update.effective_user.id
     user_data = _.user_data.setdefault(user_id, {})
 
     # Check if the user is already in the middle of a test
     if 'current_question' in user_data:
+        # Delete the previous test messages
+        previous_message_id = user_data.get('previous_message')
+        if previous_message_id:
+            delete_message(update, previous_message_id)
+
         # Clear ongoing test data to start a new one
         user_data.clear()
 
