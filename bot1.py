@@ -1,7 +1,7 @@
 import logging
 import csv
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Updater, CommandHandler, CallbackContext, ConversationHandler, CallbackQueryHandler, MessageHandler, Filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackContext, ConversationHandler, CallbackQueryHandler
 import datetime
 
 # Enable logging
@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 # State definitions for top-level conversation
 SELECTING_QUESTIONS = 1
-TEST_IN_PROGRESS = 2
 
 # Constants for this example
 QUESTIONS_FILE = "questions.tsv"
@@ -36,22 +35,38 @@ def read_questions_from_file():
     return questions
 
 
-def main_menu():
-    # Create the main menu keyboard
-    menu_keyboard = [
-        [KeyboardButton("Start Test")]
-    ]
-    return ReplyKeyboardMarkup(menu_keyboard, one_time_keyboard=True, resize_keyboard=True)
-
-
 def start(update: Update, _: CallbackContext) -> int:
     user_id = update.effective_user.id
     user_data = _.user_data.setdefault(user_id, {})
 
-    # Show the main menu with "Start Test" button
-    update.message.reply_text("Hello! I'm your depression test bot. How can I assist you?", reply_markup=main_menu())
+    # Check if the user is new or in the middle of a test
+    if 'current_question' not in user_data:
+        # New user, show the "Start Test" button
+        keyboard = [
+            [InlineKeyboardButton("Start Test", callback_data='start_test')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        update.message.reply_text("Hello! I'm your depression test bot. How can I assist you?", reply_markup=reply_markup)
+    else:
+        # User in the middle of a test, ask if they want to cancel the ongoing test
+        keyboard = [
+            [InlineKeyboardButton("Cancel Current Test", callback_data='cancel_test')],
+            [InlineKeyboardButton("Start New Test", callback_data='start_test')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        update.message.reply_text("You have an ongoing test. Do you want to cancel it and start a new test?",
+                                  reply_markup=reply_markup)
 
     return SELECTING_QUESTIONS
+
+
+def delete_message(update: Update, message_id: int):
+    try:
+        update.effective_chat.bot.delete_message(chat_id=update.effective_chat.id, message_id=message_id)
+    except Exception as e:
+        logger.warning(f"Failed to delete message {message_id}: {e}")
 
 
 def start_exam(update: Update, _: CallbackContext):
@@ -60,6 +75,11 @@ def start_exam(update: Update, _: CallbackContext):
 
     # Check if the user is already in the middle of a test
     if 'current_question' in user_data:
+        # Delete the previous test messages
+        previous_message_id = user_data.get('previous_message')
+        if previous_message_id:
+            delete_message(update, previous_message_id)
+
         # Clear ongoing test data to start a new one
         user_data.clear()
 
@@ -68,17 +88,13 @@ def start_exam(update: Update, _: CallbackContext):
     user_data['current_question'] = 1  # Start from the first question
     user_data['answers'] = {}  # Initialize or reset answers dictionary
 
-    # If there was a previous message, edit it with the new test
-    previous_message_id = user_data.get('previous_message')
-    if previous_message_id:
-        update.callback_query.edit_message_text("Test started! Please answer the following questions:")
+    # Generate and send the first question
+    send_question(update, _)
 
-    next_question(update, _)
-
-    return TEST_IN_PROGRESS
+    return SELECTING_QUESTIONS
 
 
-def next_question(update: Update, _: CallbackContext):
+def send_question(update: Update, _: CallbackContext):
     user_id = update.effective_user.id
     user_data = _.user_data.get(user_id)
     if not user_data:
@@ -110,8 +126,6 @@ def next_question(update: Update, _: CallbackContext):
         message = update.effective_message.reply_text(question, reply_markup=reply_markup)
         user_data['previous_message'] = message.message_id
 
-    user_data['current_question'] += 1
-
 
 def handle_answer(update: Update, _: CallbackContext) -> int:
     query = update.callback_query
@@ -132,7 +146,10 @@ def handle_answer(update: Update, _: CallbackContext) -> int:
     user_data['answers'][question_number] = chosen_option
     user_data['current_question'] += 1
 
-    return next_question(update, _)
+    # Send the next question
+    send_question(update, _)
+
+    return SELECTING_QUESTIONS
 
 
 def show_results(update: Update, _: CallbackContext):
@@ -168,15 +185,13 @@ def show_results(update: Update, _: CallbackContext):
     if previous_message_id:
         update.callback_query.edit_message_text(
             text=f"Test completed! Your results: {result}",
-            reply_markup=None  # Remove the inline keyboard
+            reply_markup=None  # Remove the "Cancel" button from the message
         )
     else:
         update.effective_message.reply_text(f"Test completed! Your results: {result}")
 
     # Clear user data after showing results
     user_data.clear()
-
-    return SELECTING_QUESTIONS
 
 
 def main():
@@ -191,12 +206,10 @@ def main():
 
     # Add conversation handler with the state SELECTING_QUESTIONS
     conversation_handler = ConversationHandler(
-        entry_points=[MessageHandler(Filters.text("Start Test"), start_exam)],
+        entry_points=[CommandHandler('start', start)],
         states={
             SELECTING_QUESTIONS: [
-                CallbackQueryHandler(handle_answer, pattern='^[0-3]$'),
-            ],
-            TEST_IN_PROGRESS: [
+                CallbackQueryHandler(start_exam, pattern='^start_test$'),
                 CallbackQueryHandler(handle_answer, pattern='^[0-3]$'),
             ],
         },

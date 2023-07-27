@@ -8,7 +8,6 @@ import datetime
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 # State definitions for top-level conversation
 SELECTING_QUESTIONS = 1
 
@@ -68,6 +67,17 @@ def delete_message(update: Update, message_id: int):
         update.effective_chat.bot.delete_message(chat_id=update.effective_chat.id, message_id=message_id)
     except Exception as e:
         logger.warning(f"Failed to delete message {message_id}: {e}")
+
+
+def start_test_button(update: Update, _: CallbackContext):
+    # Handle the "Start Test" button press
+    return start_exam(update, _)
+    
+
+
+def handle_start_test_command(update: Update, _: CallbackContext):
+    # Trigger the start_exam function when the /start_test command is used
+    return start_exam(update, _)
 
 
 def start_exam(update: Update, _: CallbackContext):
@@ -207,15 +217,20 @@ def main():
 
     # Add conversation handler with the state SELECTING_QUESTIONS
     conversation_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+        entry_points=[
+            CommandHandler('start', start),
+        ],
         states={
             SELECTING_QUESTIONS: [
-                CallbackQueryHandler(start_exam, pattern='^start_test$'),
+                CallbackQueryHandler(start_test_button, pattern='^start_test$'),  # Handle the button press
                 CallbackQueryHandler(handle_answer, pattern='^[0-3]$'),
             ],
         },
         fallbacks=[]
     )
+
+    # Add a handler for the /start_test command
+    dp.add_handler(CommandHandler('start_test', handle_start_test_command))
 
     dp.add_handler(conversation_handler)
 
@@ -224,7 +239,6 @@ def main():
 
     # Run the bot until the user presses Ctrl-C or the process receives SIGINT, SIGTERM, or SIGABRT
     updater.idle()
-
 
 if __name__ == '__main__':
     main()
