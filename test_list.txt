@@ -1,0 +1,23 @@
+There are several evidence-based questionnaires and assessments used to evaluate various mental health conditions. These questionnaires are designed to provide insights into a person's mental health and are commonly used by healthcare professionals and researchers. Here are some well-known ones:
+
+Generalized Anxiety Disorder 7 (GAD-7): A brief questionnaire used to assess the severity of generalized anxiety disorder. It consists of seven items that measure symptoms like restlessness, worry, and irritability.
+
+Patient Health Questionnaire 9 (PHQ-9): This tool is used to assess the severity of depression. It consists of nine items that measure the presence of depressive symptoms.
+
+Hamilton Anxiety Rating Scale (HAM-A): A clinician-administered questionnaire to assess the severity of anxiety symptoms. It consists of 14 items that cover both psychological and physical symptoms of anxiety.
+
+Edinburgh Postnatal Depression Scale (EPDS): This questionnaire is specifically designed to assess the risk of postnatal depression in women. It contains ten items related to depressive symptoms experienced after childbirth.
+
+Social Phobia Inventory (SPIN): A self-report questionnaire that assesses social anxiety disorder. It contains 17 items related to fear and avoidance in social situations.
+
+Yale-Brown Obsessive-Compulsive Scale (Y-BOCS): A questionnaire used to evaluate the severity of obsessive-compulsive disorder (OCD). It assesses the frequency and severity of obsessions and compulsions.
+
+Post-Traumatic Stress Disorder Checklist for DSM-5 (PCL-5): A self-report questionnaire used to assess symptoms of post-traumatic stress disorder (PTSD). It consists of 20 items that cover the different aspects of PTSD symptoms.
+
+Beck Anxiety Inventory (BAI): This questionnaire measures the severity of anxiety symptoms. It contains 21 items related to the cognitive, behavioral, and physiological aspects of anxiety.
+
+Beck Hopelessness Scale (BHS): This scale is used to assess the level of hopelessness in individuals. It consists of 20 true/false statements related to feelings about the future.
+
+Kessler Psychological Distress Scale (K10): A self-report questionnaire used to measure psychological distress. It contains ten items related to symptoms of anxiety and depression.
+
+These questionnaires are widely used in clinical settings and research studies to assess mental health conditions and monitor treatment progress. However, it's important to note that while these assessments can provide valuable information, a formal diagnosis and treatment plan should always be made by a qualified healthcare professional based on a comprehensive evaluation of the individual's mental health.

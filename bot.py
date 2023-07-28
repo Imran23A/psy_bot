@@ -199,7 +199,7 @@ def show_results(update: Update, _: CallbackContext):
 
     # Compose the message with the test results
     message = (
-        f"Вы прошли тест ({timestamp}), судя по вашим ответам ваш результат: {total_score} баллов по шкале Бека. "
+        f"Вы прошли тест ({timestamp}), судя по вашим ответам ваш результат по шкале Бека: {total_score} . "
         f"Судя по всему у вас {result}"
     )
 
