@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 SELECTING_QUESTIONS = 1
 
 # Constants for this example
-QUESTIONS_FILE = "questions.tsv"
+QUESTIONS_FILE = "Beck's_depress.tsv"  # Change the filename
 RESULTS_FILE = "results.csv"
 QUESTIONS_PER_TEST = 21
 
-# A dictionary containing the questions and options read from the questions.tsv file
+# A dictionary containing the questions and options read from the Beck's_depress.tsv file
 questions = {}
 
 
@@ -41,25 +41,25 @@ def start(update: Update, _: CallbackContext) -> int:
 
     # Check if the user is new or in the middle of a test
     if 'current_question' not in user_data:
-        # New user, show the "Start Test" button
+        # New user, show the "тест депрессии Бека" button
         keyboard = [
-            [InlineKeyboardButton("Start Test", callback_data='start_test')]
+            [InlineKeyboardButton("тест депрессии Бека", callback_data='start_test')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        update.message.reply_text("Hello! I'm your depression test bot. How can I assist you?", reply_markup=reply_markup)
+        update.message.reply_text("Привет! Я твой бот для теста депрессии. Чем я могу помочь?", reply_markup=reply_markup)
+        return SELECTING_QUESTIONS  # Move to the SELECTING_QUESTIONS state
     else:
         # User in the middle of a test, ask if they want to cancel the ongoing test
         keyboard = [
-            [InlineKeyboardButton("Cancel Current Test", callback_data='cancel_test')],
-            [InlineKeyboardButton("Start New Test", callback_data='start_test')]
+            [InlineKeyboardButton("Тест депрессии Бека", callback_data='depression_Beck_test')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        update.message.reply_text("You have an ongoing test. Do you want to cancel it and start a new test?",
-                                  reply_markup=reply_markup)
-
-    return SELECTING_QUESTIONS
+        # Since you don't want to show any message when the user taps the button, you can simply edit the previous message
+        # with the new keyboard, instead of sending a new message.
+        update.callback_query.edit_message_reply_markup(reply_markup=reply_markup)
+        return SELECTING_QUESTIONS  # Move to the SELECTING_QUESTIONS state
 
 
 def delete_message(update: Update, message_id: int):
@@ -200,7 +200,7 @@ def show_results(update: Update, _: CallbackContext):
     # Compose the message with the test results
     message = (
         f"Вы прошли тест ({timestamp}), судя по вашим ответам ваш результат по шкале Бека: {total_score} . "
-        f"Судя по всему у вас {result}"
+        f"вероятнее всего у вас {result}"
     )
 
     # If there was a previous message, edit it with the results, otherwise send a new message
