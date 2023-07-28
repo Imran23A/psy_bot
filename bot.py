@@ -173,33 +173,45 @@ def show_results(update: Update, _: CallbackContext):
     total_score = sum(answers.values())
 
     result = ""
-    if total_score <= 9:
-        result = "You have no depressive symptoms."
-    elif 10 <= total_score <= 15:
-        result = "You may have mild depression (subdepression)."
-    elif 16 <= total_score <= 19:
-        result = "You have moderate depression."
-    elif 20 <= total_score <= 29:
-        result = "You have severe depression (moderate severity)."
+    if total_score <= 10:
+        result = "отсутствуют или не выражены симптомы депрессии."
+    elif 11 <= total_score <= 16:
+        result = "имеются нарушения настроения."
+    elif 17 <= total_score <= 20:
+        result = "есть симптомы на границе клинической депрессии."
+    elif 21 <= total_score <= 30:
+        result = "есть симптомы которые свидетельствуют или могут привести к умеренной депрессии."
+    elif 31 <= total_score <= 40:
+        result = "имеются серьезные нарушения настроения либо выраженная депрессия."
     else:
-        result = "You have severe depression."
+        result = "есть симптомы серьезной депрессии."
 
     # Save results in CSV file
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open(RESULTS_FILE, 'a', newline='') as csvfile:
-        fieldnames = ['user_id', 'timestamp', 'result']
+        fieldnames = ['user_id', 'timestamp', 'result', 'answers']  # Add 'answers' to the header
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writerow({'user_id': user_id, 'timestamp': timestamp, 'result': total_score})
+
+        # Convert answers dictionary to a comma-separated string
+        answers_str = ",".join([str(answers[q]) for q in sorted(answers.keys())])
+
+        writer.writerow({'user_id': user_id, 'timestamp': timestamp, 'result': total_score, 'answers': answers_str})
+
+    # Compose the message with the test results
+    message = (
+        f"Вы прошли тест ({timestamp}), судя по вашим ответам ваш результат: {total_score} баллов по шкале Бека. "
+        f"Судя по всему у вас {result}"
+    )
 
     # If there was a previous message, edit it with the results, otherwise send a new message
     previous_message_id = user_data.get('previous_message')
     if previous_message_id:
         update.callback_query.edit_message_text(
-            text=f"Test completed! Your results: {result}",
+            text=message,
             reply_markup=None  # Remove the "Cancel" button from the message
         )
     else:
-        update.effective_message.reply_text(f"Test completed! Your results: {result}")
+        update.effective_message.reply_text(message)
 
     # Clear user data after showing results
     user_data.clear()
