@@ -39,7 +39,7 @@ QUESTIONS_COUNT = {
 }
 
 # A dictionary containing the questions and options read from the Beck's_depress.tsv file
-questions = {}
+# questions = {}
 
 
 def read_questions_from_file(test_name: str):
@@ -50,6 +50,7 @@ def read_questions_from_file(test_name: str):
     try:
         with open(filename, 'r', encoding='utf-8') as file:
             lines = file.readlines()
+            questions = {}  # Initialize 'questions' for each test separately
             for line in lines:
                 data = line.strip().split('\t')
                 if len(data) == 5:
@@ -105,7 +106,36 @@ def start_test_button(update: Update, _: CallbackContext):
 
 def handle_start_test_command(update: Update, _: CallbackContext):
     # Trigger the start_exam function when the /start_test command is used
-    return start_exam(update, _)
+    user_id = update.effective_user.id
+    user_data = _.user_data.setdefault(user_id, {})
+    
+    # Check if the /start_test command is invoked directly or through a callback query
+    if update.callback_query:
+        query = update.callback_query
+        test_name = query.data.split('_')[-1]  # Extract the test name from the callback data
+    else:
+        # If the command is invoked directly, the test_name will be passed as the command argument
+        test_name = _.args[0] if _.args else None
+
+    if not test_name:
+        # Test name is not provided, show an error message
+        update.message.reply_text("Please provide a valid test name after the /start_test command.")
+        return
+
+    # Clear ongoing test data to start a new one
+    user_data.clear()
+    
+    questions, questions_count = read_questions_from_file(test_name)
+    user_data['current_question'] = 1  # Start from the first question
+    user_data['test_name'] = test_name  # Store the test name in user data
+    user_data['questions_count'] = questions_count  # Store the number of questions for the test
+    user_data['answers'] = {}  # Initialize or reset answers dictionary
+    user_data['questions'] = questions  # Store the questions in user data
+
+    # Generate and send the first question
+    send_question(update, _, test_name)
+
+    return SELECTING_QUESTIONS
 
 def start_exam(update: Update, _: CallbackContext):
     query = update.callback_query
@@ -129,6 +159,7 @@ def start_exam(update: Update, _: CallbackContext):
     user_data['test_name'] = test_name  # Store the test name in user data
     user_data['questions_count'] = questions_count  # Store the number of questions for the test
     user_data['answers'] = {}  # Initialize or reset answers dictionary
+    user_data['questions'] = questions  # Store the questions in user data
 
     # Generate and send the first question
     send_question(update, _, test_name)
@@ -143,6 +174,7 @@ def send_question(update: Update, _: CallbackContext, test_name: str):
 
     current_question_number = user_data.get('current_question')
     questions_count = user_data.get('questions_count', 0)
+    questions = user_data.get('questions')  # Retrieve the questions from user data
 
     if not current_question_number or current_question_number > questions_count:
         # Test is completed, show results as a "fake" last question
