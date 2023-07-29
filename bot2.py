@@ -260,18 +260,14 @@ def show_results(update: Update, _: CallbackContext, test_name: str) -> None:
     elif test_name == "тест тревожности Бека":
         # Define the scoring scale for the Beck's anxiety test
         # You can replace these values with the correct scoring scale
-        if total_score <= 10:
-            result = "отсутствует или не выражены симптомы тревожности."
-        elif 11 <= total_score <= 16:
-            result = "имеются слабые проявления тревожности."
-        elif 17 <= total_score <= 20:
-            result = "есть симптомы тревожности на границе патологии."
-        elif 21 <= total_score <= 30:
-            result = "есть симптомы тревожности, свидетельствующие о наличии клинической тревожности."
-        elif 31 <= total_score <= 40:
-            result = "есть симптомы тревожности на границе выраженной тревоги."
+        if total_score <= 7:
+            result = "минимальный уровень тревожности."
+        elif 8 <= total_score <= 15:
+            result = "легкая тревожность и беспокойство."
+        elif 16 <= total_score <= 25:
+            result = "умеренная тревожность."
         else:
-            result = "есть симптомы выраженной тревоги."
+            result = "сильная тревога."
 
     elif test_name == "тест симптомов ПТСР":
         # Define the scoring scale for the PCL-5 test (Post-Traumatic Stress Disorder Checklist for DSM-5)
@@ -320,8 +316,8 @@ def show_results(update: Update, _: CallbackContext, test_name: str) -> None:
 
     # Compose the message with the test results
     message = (
-        f"Вы прошли тест ({timestamp}), судя по вашим ответам ваш результат по тесту '{test_name}': {total_score} . "
-        f"Вероятнее всего у вас {result}"
+        f"Вы прошли тест ({timestamp}), судя по вашим ответам ваш результат по тесту '{test_name}': {total_score}." 
+        f"Вероятно у вас {result}"
     )
 
     # If there was a previous message, edit it with the results, otherwise send a new message
