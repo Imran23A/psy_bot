@@ -102,15 +102,19 @@ def show_question(update: Update, context: CallbackContext) -> int:
         keyboard = [[InlineKeyboardButton(option, callback_data=str(index))] for index, option in enumerate(options)]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # Edit the message if it's from a callback query, else send a new message
-        if update.callback_query:
-            update.callback_query.edit_message_text(text=question_text, reply_markup=reply_markup)
+        # If this is the first question, send a new message
+        if current_question_index == 0:
+            sent_message = context.bot.send_message(chat_id=update.effective_chat.id, text=question_text, reply_markup=reply_markup)
+            # Store the message ID for editing later
+            context.user_data['question_message_id'] = sent_message.message_id
         else:
-            update.message.reply_text(question_text, reply_markup=reply_markup)
+            # Edit the existing message for subsequent questions
+            message_id = context.user_data.get('question_message_id')
+            context.bot.edit_message_text(chat_id=update.effective_chat.id, message_id=message_id, text=question_text, reply_markup=reply_markup)
 
         return SHOW_QUESTION
     else:
-        # End of test, calculate results and handle accordingly
+        # End of test, handle accordingly
         return end_test(update, context)
 
 
