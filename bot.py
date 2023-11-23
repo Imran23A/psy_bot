@@ -36,9 +36,24 @@ def send_menu(update: Update, context: CallbackContext):
     reply_markup = InlineKeyboardMarkup(keyboard)
     context.bot.send_message(chat_id=update.effective_chat.id, text='Выберите тест:', reply_markup=reply_markup)    
 
+def delete_previous_questions(update: Update, context: CallbackContext):
+    """Deletes previously sent test questions."""
+    chat_id = update.effective_chat.id
+    question_message_id = context.user_data.get('question_message_id')
+
+    if question_message_id:
+        try:
+            context.bot.delete_message(chat_id=chat_id, message_id=question_message_id)
+        except Exception as e:
+            logger.error(f"Error deleting message: {e}")
+        context.user_data.pop('question_message_id', None)
+
 def test_selection(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
+
+    # Delete any previous test question messages
+    delete_previous_questions(update, context)
 
     # Clear previous data if any
     context.user_data.clear()
