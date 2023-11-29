@@ -97,16 +97,20 @@ def end_test(update: Update, context: CallbackContext):
         responses = [int(v) for v in context.user_data.get('answers', {}).values() if v.isdigit()]
         score_explanation = score_pcl5(responses)
     elif test_name == 'social_phobia':
-        score_explanation = result_description = score_social_phobia(total_score)
+        score_explanation = score_social_phobia(total_score)
     else:
         score_explanation = "Unknown test type."
 
-    # Record the test result in the CSV file
+    # Prepare data for CSV
     user_id = update.effective_user.id
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    answers = context.user_data.get('answers', {})
+    csv_row = [user_id, test_name, timestamp] + list(answers.values()) + [total_score, score_explanation]
+
+    # Write data to CSV
     with open('results.csv', 'a', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow([user_id, test_name, timestamp, total_score])
+        writer.writerow(csv_row)
 
     # Send the results to the user
     result_message = f"ваш результат {test_name}: {total_score}\n{score_explanation}"
