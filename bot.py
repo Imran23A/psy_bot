@@ -3,6 +3,7 @@ from telegram.ext import Updater, CommandHandler, CallbackContext, ConversationH
 import logging
 import csv
 from datetime import datetime
+from scoring import score_becks_depression, score_becks_anxiety, score_pcl5, make_provisional_diagnosis, score_social_phobia
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -85,9 +86,22 @@ def load_test_questions(filename):
 def end_test(update: Update, context: CallbackContext):
     # Calculate the test results
     total_score = calculate_results(context.user_data)
+    test_name = context.user_data['test_name']
+    
+    # Determine the appropriate scoring explanation
+    if test_name == 'beck_depression':
+        score_explanation = score_becks_depression(total_score)
+    elif test_name == 'beck_anxiety':
+        score_explanation = score_becks_anxiety(total_score)
+    elif test_name == 'ptsd':
+        responses = [int(v) for v in context.user_data.get('answers', {}).values() if v.isdigit()]
+        score_explanation = score_pcl5(responses)
+    elif test_name == 'social_phobia':
+        score_explanation = result_description = score_social_phobia(total_score)
+    else:
+        score_explanation = "Unknown test type."
 
     # Record the test result in the CSV file
-    test_name = context.user_data['test_name']
     user_id = update.effective_user.id
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open('results.csv', 'a', newline='') as file:
@@ -95,7 +109,7 @@ def end_test(update: Update, context: CallbackContext):
         writer.writerow([user_id, test_name, timestamp, total_score])
 
     # Send the results to the user
-    result_message = f"Your results for {test_name}: {total_score}"
+    result_message = f"ваш результат {test_name}: {total_score}\n{score_explanation}"
     if update.callback_query:
         update.callback_query.edit_message_text(text=result_message)
     else:
@@ -149,18 +163,17 @@ def handle_answer(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     query.answer()
 
-    # Check if the callback data is for an answer or test selection
-    if query.data.isdigit():
-        # Handle answer selection
-        current_question_index = context.user_data['current_question']
-        context.user_data.setdefault('answers', {})[current_question_index] = query.data
-
-        # Increment the question index and show next question
-        context.user_data['current_question'] += 1
-        return show_question(update, context)
-    else:
-        # Handle test selection
+    # Handle test selection if the callback data matches test names
+    if query.data in ['beck_depression', 'beck_anxiety', 'ptsd', 'social_phobia']:
         return test_selection(update, context)
+
+    # Otherwise, handle it as an answer to a question
+    current_question_index = context.user_data['current_question']
+    context.user_data.setdefault('answers', {})[current_question_index] = query.data
+
+    # Increment the question index and show next question
+    context.user_data['current_question'] += 1
+    return show_question(update, context)
 
 def cancel_handler(update: Update, context: CallbackContext) -> int:
     update.message.reply_text('Test cancelled. Type /start to begin again.')
